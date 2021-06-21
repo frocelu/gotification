@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/gen2brain/beeep"
@@ -15,6 +17,17 @@ type Config struct {
 	port             uint64
 	clientToken      string
 	applicationToken string
+}
+
+func (c *Config) genWsUri() string {
+	wsUri := ""
+	if c.applicationToken != "" {
+		wsUri = fmt.Sprintf("%v:%v/stream", config.server, config.port)
+	} else {
+		wsUri = fmt.Sprintf("%v:%v/stream", config.server, config.port)
+	}
+	fmt.Println(wsUri)
+	return wsUri
 }
 
 func (c *Config) parseConfig() {
@@ -57,32 +70,30 @@ func (c *Config) parseConfig() {
 
 	applicationToken := t.Get("applicationToken")
 	if !applicationToken.Exists() {
-		log.Fatal("no applicationToken")
-	} else if applicationToken.String() == "Please fill Your applicationToken" {
-		log.Fatal("Please fill Your applicationToken")
+		c.applicationToken = ""
+	} else if applicationToken.String() == "Please fill Your applicationToken, or remove this key to get all messages" {
+		c.applicationToken = ""
 	} else {
 		c.applicationToken = applicationToken.String()
 	}
 }
 
 func connectWS(config *Config) error {
-	c, _, err := websocket.DefaultDialer.Dial(config., nil)
+	header := http.Header{}
+	header.Set("X-Gotify-Key", config.clientToken)
+	c, _, err := websocket.DefaultDialer.Dial(config.genWsUri(), header)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
 	defer c.Close()
 
-	err = c.WriteMessage(websocket.TextMessage, []byte("hello ithome30day"))
-	if err != nil {
-		log.Println(err)
-		return
-	}
 	_, msg, err := c.ReadMessage()
 	if err != nil {
 		log.Println("read:", err)
-		return
+		return err
 	}
 	log.Printf("receive: %s\n", msg)
+	return nil
 }
 
 var config Config
@@ -94,8 +105,12 @@ func init() {
 }
 
 func main() {
-
-	err := beeep.Notify("Title", "Message body", "assets/information.png")
+	connectWS(&config)
+	// err := beeep.Notify("gotification", "Title", "測試", "assets/information.png")
+	// if err != nil {
+	// 	log.Panic(err)
+	// }
+	err := beeep.Alert("gotification", "Title", "測試", "assets/information.png")
 	if err != nil {
 		log.Panic(err)
 	}
